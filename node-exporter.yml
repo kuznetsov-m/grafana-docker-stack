@@ -2,6 +2,7 @@ version: "3.9"
 services:
   node-exporter:
     image: prom/node-exporter:v1.3.1
+    # hostname: <your_host_name> 
     ports:
       - "9100:9100"
     volumes:
