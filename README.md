@@ -32,6 +32,26 @@ docker stack deploy -c grafana-docker-stack/node-exporter.yml node-exporter
 3. Reload prometheus config via this command:
 ```
 docker ps | grep prometheus | awk '{print $1}' | xargs docker kill -s SIGHUP
+```
+
+## Добавление нового хоста в мониторинг
+
+1. `git clone git@github.com:kuznetsov-m/grafana-docker-stack.git`
+2. `cd grafana-docker-stack && nano node-exporter.yml` настроить hostname: произвольное имя (для наглядности в grafana)
+3. `sudo docker compose -f node-exporter.yml up -d`
+4. возможно потребуется: открыть сетевой порт (по умолчанию 9100) для сбора метрик от node-exporter.yml
+5. добавление нового node-exporter в prometheus:
+
+`sudo nano /var/lib/docker/volumes/grafana-docker-stack_prom-configs/_data/prometheus.yml`
+
+добавить в конец файла:
+```yaml
+  # KM add manually:
+  - job_name: "<your_hostname>_node-exporter"
+    static_configs:
+      - targets: ["<node-exporter_ip_address>:9100"]
+```
+(optional) можно сходить в web интерфейс prometheus и посмотреть что node найден и статус up
 
 # Links
 
