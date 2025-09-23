@@ -2,7 +2,7 @@ version: "3.9"
 services:
   node-exporter:
     image: prom/node-exporter:v1.3.1
-    # hostname: <your_host_name> 
+    # hostname: <your_host_name>
     ports:
       - "9100:9100"
     volumes:
@@ -14,3 +14,4 @@ services:
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude'
       - '^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+    restart: unless-stopped
