@@ -1,0 +1,8 @@
+[all_vms]
+your-host-alias ansible_host=<host>
+
+[all_vms:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_user=root
+ansible_ssh_private_key_file=<file_path>
+ssh_current_port=22
