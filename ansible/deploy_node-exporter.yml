@@ -21,11 +21,64 @@
         node_exporter_home: "{{ remote_user_home.stdout }}/node-exporter"
         compose_file: "{{ remote_user_home.stdout }}/node-exporter/node-exporter.yml"
 
-    - name: Check Docker Compose
-      command: docker compose version
+    # #region agent log
+    - name: Check Docker Compose plugin (docker compose) as remote user
+      shell: bash -lc 'docker compose version'
       register: docker_compose_check
       changed_when: false
       failed_when: false
+      become: false
+
+    - name: Check standalone docker-compose as remote user
+      shell: bash -lc 'docker-compose --version'
+      register: docker_compose_standalone_check
+      changed_when: false
+      failed_when: false
+      become: false
+
+    - name: Diagnostic — which docker and PATH (remote, login shell)
+      shell: bash -lc 'echo PATH=$PATH; which docker || true; id; groups'
+      register: diag_path
+      changed_when: false
+      become: false
+
+    - name: Set docker_available and compose_cmd from checks
+      set_fact:
+        docker_available: "{{ docker_compose_check.rc == 0 or docker_compose_standalone_check.rc == 0 }}"
+        compose_cmd: "{{ 'docker compose' if docker_compose_check.rc == 0 else 'docker-compose' }}"
+
+    - name: Show docker_compose_check.rc
+      debug:
+        msg: "docker_compose_check.rc = {{ docker_compose_check.rc }}"
+
+    - name: Show docker_compose_check stdout/stderr
+      debug:
+        msg:
+          - "stdout: {{ docker_compose_check.stdout | default('') | trim }}"
+          - "stderr: {{ docker_compose_check.stderr | default('') | trim }}"
+          - "diag_path: {{ diag_path.stdout | default('') | trim }}"
+      when: diag_path is defined
+
+    - name: Append debug log (NDJSON)
+      lineinfile:
+        path: /Users/kuznetsov1024/Documents/projects/grafana-docker-stack/.cursor/debug-f8df65.log
+        line: "{{ _debug_line }}"
+        create: true
+      vars:
+        _debug_line: "{{ _debug_payload | to_json }}"
+        _debug_payload:
+          sessionId: "f8df65"
+          hypothesisId: "diagnostic"
+          message: "docker compose check + PATH/id"
+          data:
+            rc: "{{ docker_compose_check.rc }}"
+            stdout: "{{ (docker_compose_check.stdout | default(''))[:500] }}"
+            stderr: "{{ (docker_compose_check.stderr | default(''))[:500] }}"
+            which_docker_and_path: "{{ (diag_path.stdout | default(''))[:500] if diag_path is defined else '' }}"
+          timestamp: "{{ (ansible_date_time.epoch | int) * 1000 }}"
+      delegate_to: localhost
+      become: false
+    # #endregion
 
     - name: Install Docker (and Compose plugin) if missing
       block:
@@ -44,7 +97,7 @@
           retries: 12
           delay: 5
           changed_when: false
-      when: docker_compose_check.rc != 0
+      when: not docker_available
 
     - name: Create node-exporter directory
       file:
@@ -83,7 +136,7 @@
       changed_when: false
 
     - name: Run node-exporter container (recreate)
-      shell: docker compose -f "{{ compose_file }}" up -d --force-recreate
+      shell: "{{ compose_cmd }} -f \"{{ compose_file }}\" up -d --force-recreate"
       args:
         chdir: "{{ node_exporter_home }}"
       register: compose_run
