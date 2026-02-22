@@ -8,10 +8,19 @@
   gather_facts: true
   vars:
     ansible_port: "{{ ssh_current_port }}"
-    node_exporter_home: "{{ ansible_env.HOME | default('/root') }}/node-exporter"
-    compose_file: "{{ node_exporter_home }}/node-exporter.yml"
 
   tasks:
+    - name: Get remote user home directory
+      command: echo $HOME
+      register: remote_user_home
+      changed_when: false
+      become: false
+
+    - name: Set node-exporter paths (in user home)
+      set_fact:
+        node_exporter_home: "{{ remote_user_home.stdout }}/node-exporter"
+        compose_file: "{{ remote_user_home.stdout }}/node-exporter/node-exporter.yml"
+
     - name: Check Docker Compose
       command: docker compose version
       register: docker_compose_check
@@ -42,12 +51,16 @@
         path: "{{ node_exporter_home }}"
         state: directory
         mode: "0755"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
 
-    - name: Copy node-exporter.yml
-      copy:
-        src: "{{ playbook_dir }}/../node-exporter.yml"
+    - name: Deploy node-exporter.yml (hostname from inventory)
+      template:
+        src: "{{ playbook_dir }}/templates/node-exporter.yml.j2"
         dest: "{{ compose_file }}"
         mode: "0644"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
 
     - name: Ensure Docker daemon is running
       service:
@@ -69,12 +82,12 @@
       delay: 5
       changed_when: false
 
-    - name: Run node-exporter container
-      shell: docker compose -f "{{ compose_file }}" up -d
+    - name: Run node-exporter container (recreate)
+      shell: docker compose -f "{{ compose_file }}" up -d --force-recreate
       args:
         chdir: "{{ node_exporter_home }}"
       register: compose_run
-      changed_when: "'Creating' in compose_run.stdout or 'Recreating' in compose_run.stdout or 'Starting' in compose_run.stdout"
+      changed_when: true
 
     - name: Wait for node-exporter to listen on 9100
       wait_for:
